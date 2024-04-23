@@ -1,2 +1,2 @@
-# DM_Assignement3
-Assignement 3 of DH-401 course
+# DM_Assignment3
+Assignment 3 of DH-401 course
