@@ -1,4 +1,5 @@
 from music21 import converter, note, chord
+from collections import defaultdict
 
 def extract_pitches_from_midi(file_path):
     score = converter.parse(file_path)
@@ -48,11 +49,12 @@ def filter_subpatterns(repeated_patterns):
 
     return {pattern: repeated_patterns[pattern] for pattern in filtered_patterns}
 
-def get_filtered_patterns(data_list, direction='forward'):
+def get_filtered_patterns(data_list, direction='forward', min=9, max=20):
+
     all_repeated_patterns = defaultdict(int)
     
     if direction == 'forward':
-        for pattern_length in range(9, 20):
+        for pattern_length in range(min, max):
             print(f"Checking forward patterns of length {pattern_length}:")
             repeated_patterns = find_repeated_patterns(data_list, pattern_length)
             for pattern, count in repeated_patterns.items():
@@ -60,7 +62,7 @@ def get_filtered_patterns(data_list, direction='forward'):
                     all_repeated_patterns[pattern] = count
                     print(f'Pattern {pattern} occurs {count} times.')
     elif direction == 'backward':
-        for pattern_length in range(8, 19):
+        for pattern_length in range(min, max):
             print(f"Checking backward patterns of length {pattern_length}:")
             repeated_patterns = find_repeated_patterns(data_list, pattern_length)
             for pattern, count in repeated_patterns.items():
@@ -74,11 +76,32 @@ def get_filtered_patterns(data_list, direction='forward'):
 
 def merge_and_filter_patterns(patterns1, patterns2):
     merged_patterns = patterns1.copy()
-    for pattern, count in patterns2.items():
-        if pattern in merged_patterns:
-            merged_patterns[pattern] += count
-        else:
-            merged_patterns[pattern] = count
+    for pattern in patterns2:
+        if pattern not in merged_patterns:
+            merged_patterns[pattern] = patterns2[pattern]
     return merged_patterns
+
+def extract_onsets(midi_file_path):
+    """
+    Extract onsets from a MIDI file and return a sorted list of onset times.
+    
+    Parameters:
+    midi_file_path (str): Path to the MIDI file
+    
+    Returns:
+    List[float]: Sorted list of onset times
+    """
+    midi_data = converter.parse(midi_file_path)
+    onsets = []
+    
+    for element in midi_data.flat.notes:
+        if isinstance(element, note.Note) or isinstance(element, chord.Chord):
+            onsets.append(element.offset)
+    
+    # Sort the onsets to ensure they are in order
+    onsets = sorted(onsets)
+    durations = [round(float(onsets[i+1] - onsets[i]), 2) for i in range(len(onsets) - 1)]
+    
+    return onsets,durations
 
 
