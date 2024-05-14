@@ -37,6 +37,11 @@ def get_tempo_map_db(symbolic_to_performed_times: dict) -> dict and list[int]:
 
 
 def get_phrase_boundaries(path: str):
+    """
+    Get the phrase boundaries from the tempo map
+    :param path:
+    :return:
+    """
     average = get_average_timing_one_piece(path)
     tempo_map, indexes_db = get_tempo_map_db(average)
 
@@ -73,6 +78,12 @@ def get_phrase_boundaries(path: str):
 
 
 def get_time_of_phrase_boundaries(phrase_boundaries: list[int], average: dict):
+    """
+    Get the time of the phrase boundaries
+    :param phrase_boundaries:
+    :param average:
+    :return:
+    """
     boundaries_time = []
     for boundary in phrase_boundaries:
         boundaries_time.append(float(average[boundary]["performed"]["onset"]))
