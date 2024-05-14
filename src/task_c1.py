@@ -5,10 +5,10 @@ by averaging the timing attributes for each beat of a meter.
 @Author: Joris Monnet
 @Date: 2024-03-26
 """
-from src.timing_for_one_piece import get_average_timing_one_piece
-import music21
-from music21 import converter, meter, stream
 import matplotlib.pyplot as plt
+import music21
+
+from src.timing_for_one_piece import get_average_timing_one_piece
 
 
 def get_tempo_map_db(symbolic_to_performed_times: dict) -> dict and list[int]:
@@ -79,7 +79,7 @@ def get_time_of_phrase_boundaries(phrase_boundaries: list[int], average: dict):
     return boundaries_time
 
 
-def get_times_volumes_measures(midi_file_path):
+def get_times_volumes_measures(midi_file_path: str) -> tuple:
     """
     Extracts the start times, velocity values (volume), and measure numbers of each note from a MIDI file.
 
@@ -92,7 +92,7 @@ def get_times_volumes_measures(midi_file_path):
     measures (list of int): A list containing the measure numbers of all the notes in the MIDI file.
     """
     midi_data = music21.converter.parse(midi_file_path)
-    
+
     times = []
     volumes = []
     measures = []
@@ -116,7 +116,8 @@ def get_times_volumes_measures(midi_file_path):
 
     return times, volumes, measures
 
-def get_scaled_differences_in_volumes(list_volume_performed):
+
+def get_scaled_differences_in_volumes(list_volume_performed: list) -> list:
     """
     Calculates the squared differences in volume between consecutive elements
     in the input list, and scales these differences to the range [0, 1].
@@ -128,14 +129,14 @@ def get_scaled_differences_in_volumes(list_volume_performed):
     list_volume_differences_scaled (list of float): A list of scaled squared differences in volume, 
                                                      where the values are normalized to the range [0, 1].
     """
-    list_volume_differences = [abs(list_volume_performed[i] - list_volume_performed[i+1]) **2
+    list_volume_differences = [abs(list_volume_performed[i] - list_volume_performed[i + 1]) ** 2
                                for i in range(len(list_volume_performed) - 1)]
     max_difference = max(list_volume_differences)
     list_volume_differences_scaled = [x / max_difference for x in list_volume_differences]
     return list_volume_differences_scaled
 
 
-def get_times_threshold(list_time, list_volume_differences_scaled, threshold):
+def get_times_threshold(list_time: list, list_volume_differences_scaled: list, threshold: float) -> list:
     """
     Function to return the times when volume changes exceed a specified threshold.
 
@@ -147,19 +148,18 @@ def get_times_threshold(list_time, list_volume_differences_scaled, threshold):
     Returns:
     list of float: List of times when volume changes exceed the threshold.
     """
-    
+
     # List to store indices where the volume difference exceeds the threshold
     indices_above_threshold = [index for index, value in enumerate(list_volume_differences_scaled) if value > threshold]
-    
+
     # List to store times corresponding to the indices above threshold
     times_above_threshold = [list_time[index] for index in indices_above_threshold]
-    
+
     # Return the list of times when volume changes exceed the threshold
     return times_above_threshold
 
 
-
-def offset_to_seconds(offset, tempo):
+def offset_to_seconds(offset: float, tempo: float) -> float:
     """
     Converts a musical offset to seconds based on the given tempo.
 
@@ -170,14 +170,14 @@ def offset_to_seconds(offset, tempo):
     Returns:
     float: The equivalent time in seconds.
     """
-    
+
     # Calculate the duration of one quarter note in seconds
     quarter_note_duration = 60 / tempo
     # Calculate and return the time in seconds for the given offset
     return offset * quarter_note_duration
 
 
-def plot_volume(list_volume_performed, filtered_data, list_time, tempo):
+def plot_volume(list_volume_performed: list[float], filtered_data: list[float], list_time: list[float], tempo: float):
     """
     Plots the scaled volume differences and highlights certain points with vertical lines.
 
@@ -198,9 +198,3 @@ def plot_volume(list_volume_performed, filtered_data, list_time, tempo):
     plt.ylabel('Volume Differences Scaled ')
     plt.title('Volume Differences Scaled')
     plt.show()
-
-
-
-if __name__ == "__main__":
-    path = "data/annotations"
-    print(get_phrase_boundaries(path))
