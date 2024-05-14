@@ -1,7 +1,10 @@
+import music21
 from music21 import converter, note, chord
+from collections import defaultdict
+import numpy as np
 
-def extract_pitches_from_midi(file_path):
-    score = converter.parse(file_path)
+def extract_pitches_and_intervals(midi_file_path):
+    score = converter.parse(midi_file_path)
     pitches = []
     
     for element in score.recurse():
@@ -9,16 +12,6 @@ def extract_pitches_from_midi(file_path):
             pitches.append(element.pitch.midi)
         elif isinstance(element, chord.Chord):
             pitches.extend([p.midi for p in element.pitches])
-    
-    return pitches
-
-def extract_pitches_and_intervals(midi_file_path):
-    midi_data = music21.converter.parse(midi_file_path)
-
-    pitches = []
-    for note in midi_data.recurse().notes:
-        if note.isNote:
-            pitches.append(note.pitch.midi)
 
     # Calculate the interval (difference) between pitches
     intervals = []
@@ -27,6 +20,7 @@ def extract_pitches_and_intervals(midi_file_path):
         intervals.append(interval)
 
     return pitches, intervals
+
 
 def find_repeated_patterns(data_list, pattern_length=8):
     pattern_dict = defaultdict(int)
@@ -48,25 +42,25 @@ def filter_subpatterns(repeated_patterns):
 
     return {pattern: repeated_patterns[pattern] for pattern in filtered_patterns}
 
-def get_filtered_patterns(data_list, direction='forward'):
+def get_filtered_patterns(data_list, direction='forward', min_length=9, max_length=20):
     all_repeated_patterns = defaultdict(int)
     
     if direction == 'forward':
-        for pattern_length in range(9, 20):
-            print(f"Checking forward patterns of length {pattern_length}:")
+        for pattern_length in range(min_length, max_length):
+            # print(f"Checking forward patterns of length {pattern_length}:")
             repeated_patterns = find_repeated_patterns(data_list, pattern_length)
             for pattern, count in repeated_patterns.items():
                 if count > 1:
                     all_repeated_patterns[pattern] = count
-                    print(f'Pattern {pattern} occurs {count} times.')
+                    # print(f'Pattern {pattern} occurs {count} times.')
     elif direction == 'backward':
-        for pattern_length in range(8, 19):
-            print(f"Checking backward patterns of length {pattern_length}:")
+        for pattern_length in range(min_length, max_length):
+            # print(f"Checking backward patterns of length {pattern_length}:")
             repeated_patterns = find_repeated_patterns(data_list, pattern_length)
             for pattern, count in repeated_patterns.items():
                 if count > 1:
                     all_repeated_patterns[pattern] = count
-                    print(f'Pattern {pattern} occurs {count} times.')
+                    # print(f'Pattern {pattern} occurs {count} times.')
     
     filtered_patterns = filter_subpatterns(all_repeated_patterns)
     
@@ -80,5 +74,30 @@ def merge_and_filter_patterns(patterns1, patterns2):
         else:
             merged_patterns[pattern] = count
     return merged_patterns
+
+def quantize_data(data_list, bins):
+    """
+    Quantize the data list into specified bins.
+    
+    Args:
+    data_list (list): List of original data points.
+    bins (list): List of bin edges.
+    
+    Returns:
+    list: List of quantized data points.
+    """
+    bin_centers = [(bins[i] + bins[i + 1]) / 2 for i in range(len(bins) - 1)]
+    quantized_data = []
+    for data in data_list:
+        for i in range(len(bins) - 1):
+            if bins[i] <= data < bins[i + 1]:
+                quantized_data.append(bin_centers[i])
+                break
+        else:
+            if data >= bins[-1]:
+                quantized_data.append(bin_centers[-1])
+            else:
+                quantized_data.append(bin_centers[0])
+    return quantized_data
 
 

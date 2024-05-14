@@ -6,12 +6,15 @@ by averaging the timing attributes for each beat of a meter.
 @Date: 2024-03-26
 """
 from src.timing_for_one_piece import get_average_timing_one_piece
+import music21
+from music21 import converter, meter, stream
+import matplotlib.pyplot as plt
 
 
 def get_tempo_map_db(symbolic_to_performed_times: dict) -> dict and list[int]:
     """
     Get the tempo map from the symbolic to the performed times
-    and the indexes of the downbeats
+    Compute the tempo ratio for each beat
     :param symbolic_to_performed_times:
     :return: dict
     """
@@ -33,12 +36,7 @@ def get_tempo_map_db(symbolic_to_performed_times: dict) -> dict and list[int]:
     return result, indexes
 
 
-def get_phrase_boundaries_tempo(path: str) -> list[int] and list[float]:
-    """
-    Get the phrase boundaries for a piece by comparing the tempo changes
-    :param path: the path to the piece folder
-    :return: list[int] and list[float] representing the indexes and the times of the phrase boundaries
-    """
+def get_phrase_boundaries(path: str):
     average = get_average_timing_one_piece(path)
     tempo_map, indexes_db = get_tempo_map_db(average)
 
@@ -75,10 +73,97 @@ def get_phrase_boundaries_tempo(path: str) -> list[int] and list[float]:
 
 
 def get_time_of_phrase_boundaries(phrase_boundaries: list[int], average: dict):
+    boundaries_time = []
+    for boundary in phrase_boundaries:
+        boundaries_time.append(float(average[boundary]["performed"]["onset"]))
+    return boundaries_time
+
+
+def get_times_volumes_measures(midi_file_path):
     """
-    Get the time of the phrase boundaries
-    :param phrase_boundaries:
-    :param average:
-    :return:
+    Extracts the start times, velocity values (volume), and measure numbers of each note from a MIDI file.
+
+    Parameters:
+    midi_file_path (str): The path to the input MIDI file.
+    
+    Returns:
+    times (list of float): A list containing the start times of all the notes in the MIDI file.
+    volumes (list of int): A list containing the velocity values of all the notes in the MIDI file.
+    measures (list of int): A list containing the measure numbers of all the notes in the MIDI file.
     """
-    return [float(average[boundary]["performed"]["onset"]) for boundary in phrase_boundaries]
+    # MIDIファイルを読み込む
+    midi_data = music21.converter.parse(midi_file_path)
+    
+    # 開始時間、音量、小節番号のリストを保存するリスト
+    times = []
+    volumes = []
+    measures = []
+
+    # MIDIパートを処理する
+    for part in midi_data.parts:
+        for element in part.flatten().notesAndRests:
+            if isinstance(element, music21.note.Note):
+                start_time = element.offset
+                velocity = element.volume.velocity
+                measure_number = element.measureNumber
+                times.append(start_time)
+                volumes.append(velocity)
+                measures.append(measure_number)
+            elif isinstance(element, music21.chord.Chord):
+                start_time = element.offset
+                velocity = element.volume.velocity
+                measure_number = element.measureNumber
+                times.append(start_time)
+                volumes.append(velocity)
+                measures.append(measure_number)
+
+    return times, volumes, measures
+
+def get_scaled_differences_in_volumes(list_volume_performed):
+    """
+    Calculates the squared differences in volume between consecutive elements
+    in the input list, and scales these differences to the range [0, 1].
+
+    Parameters:
+    list_volume_performed (list of int or float): A list of volume values.
+
+    Returns:
+    list_volume_differences_scaled (list of float): A list of scaled squared differences in volume, 
+                                                     where the values are normalized to the range [0, 1].
+    """
+    list_volume_differences = [abs(list_volume_performed[i] - list_volume_performed[i+1]) **2
+                               for i in range(len(list_volume_performed) - 1)]
+    max_difference = max(list_volume_differences)
+    list_volume_differences_scaled = [x / max_difference for x in list_volume_differences]
+    return list_volume_differences_scaled
+
+
+def get_times_threshold(list_time, list_volume_differences_scaled, threshold):
+    for i in range(len(list_time)):
+        indices_above_threshold = [index for index, value in enumerate(list_volume_differences_scaled) if value > threshold]
+        times_above_threshold = [list_time[index] for index in indices_above_threshold]
+    return times_above_threshold
+
+
+def offset_to_seconds(offset, tempo):
+    quarter_note_duration = 60 / tempo
+    return offset * quarter_note_duration
+
+def plot_volume_and_possibilities(list_volume_performed, filtered_data, list_time):
+    list_time_second = [offset_to_seconds(x, tempo) for x in list_time]
+    list_filtered_second = [offset_to_seconds(x, tempo) for x in filtered_data]
+    list_volume_differences_scaled = get_scaled_differences_in_volumes(list_volume_performed)
+    plt.figure(figsize=(10, 6))
+    plt.plot(list_time_second[:-2], list_volume_differences_scaled, linestyle='-', color='b')
+    for x in list_filtered_second:
+        plt.axvline(x=x, color='y', linestyle='--')
+    plt.xlabel('Time[s]')
+    plt.ylabel('Volume Differences Scaled ')
+    plt.title('Volume Differences Scaled')
+    plt.show()
+
+
+
+if __name__ == "__main__":
+    path = "data/annotations"
+    print(get_phrase_boundaries(path))
