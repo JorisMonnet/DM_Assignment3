@@ -11,7 +11,7 @@ from src.timing_for_one_piece import get_average_timing_one_piece
 def get_tempo_map_db(symbolic_to_performed_times: dict) -> dict and list[int]:
     """
     Get the tempo map from the symbolic to the performed times
-    Compute the tempo ratio for each beat
+    and the indexes of the downbeats
     :param symbolic_to_performed_times:
     :return: dict
     """
@@ -33,7 +33,12 @@ def get_tempo_map_db(symbolic_to_performed_times: dict) -> dict and list[int]:
     return result, indexes
 
 
-def get_phrase_boundaries(path: str):
+def get_phrase_boundaries_tempo(path: str) -> list[int] and list[float]:
+    """
+    Get the phrase boundaries for a piece by comparing the tempo changes
+    :param path: the path to the piece folder
+    :return: list[int] and list[float] representing the indexes and the times of the phrase boundaries
+    """
     average = get_average_timing_one_piece(path)
     tempo_map, indexes_db = get_tempo_map_db(average)
 
@@ -70,12 +75,10 @@ def get_phrase_boundaries(path: str):
 
 
 def get_time_of_phrase_boundaries(phrase_boundaries: list[int], average: dict):
-    boundaries_time = []
-    for boundary in phrase_boundaries:
-        boundaries_time.append(float(average[boundary]["performed"]["onset"]))
-    return boundaries_time
-
-
-if __name__ == "__main__":
-    path = "data/annotations"
-    print(get_phrase_boundaries(path))
+    """
+    Get the time of the phrase boundaries
+    :param phrase_boundaries:
+    :param average:
+    :return:
+    """
+    return [float(average[boundary]["performed"]["onset"]) for boundary in phrase_boundaries]
