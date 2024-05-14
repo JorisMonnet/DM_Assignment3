@@ -91,15 +91,12 @@ def get_times_volumes_measures(midi_file_path):
     volumes (list of int): A list containing the velocity values of all the notes in the MIDI file.
     measures (list of int): A list containing the measure numbers of all the notes in the MIDI file.
     """
-    # MIDIファイルを読み込む
     midi_data = music21.converter.parse(midi_file_path)
     
-    # 開始時間、音量、小節番号のリストを保存するリスト
     times = []
     volumes = []
     measures = []
 
-    # MIDIパートを処理する
     for part in midi_data.parts:
         for element in part.flatten().notesAndRests:
             if isinstance(element, music21.note.Note):
@@ -139,17 +136,57 @@ def get_scaled_differences_in_volumes(list_volume_performed):
 
 
 def get_times_threshold(list_time, list_volume_differences_scaled, threshold):
-    for i in range(len(list_time)):
-        indices_above_threshold = [index for index, value in enumerate(list_volume_differences_scaled) if value > threshold]
-        times_above_threshold = [list_time[index] for index in indices_above_threshold]
+    """
+    Function to return the times when volume changes exceed a specified threshold.
+
+    Args:
+    list_time (list of float): List of times.
+    list_volume_differences_scaled (list of float): List of scaled volume differences.
+    threshold (float): The threshold value.
+
+    Returns:
+    list of float: List of times when volume changes exceed the threshold.
+    """
+    
+    # List to store indices where the volume difference exceeds the threshold
+    indices_above_threshold = [index for index, value in enumerate(list_volume_differences_scaled) if value > threshold]
+    
+    # List to store times corresponding to the indices above threshold
+    times_above_threshold = [list_time[index] for index in indices_above_threshold]
+    
+    # Return the list of times when volume changes exceed the threshold
     return times_above_threshold
 
 
+
 def offset_to_seconds(offset, tempo):
+    """
+    Converts a musical offset to seconds based on the given tempo.
+
+    Args:
+    offset (float): The musical offset in terms of quarter notes.
+    tempo (float): The tempo in beats per minute (BPM).
+
+    Returns:
+    float: The equivalent time in seconds.
+    """
+    
+    # Calculate the duration of one quarter note in seconds
     quarter_note_duration = 60 / tempo
+    # Calculate and return the time in seconds for the given offset
     return offset * quarter_note_duration
 
-def plot_volume_and_possibilities(list_volume_performed, filtered_data, list_time, tempo):
+
+def plot_volume(list_volume_performed, filtered_data, list_time, tempo):
+    """
+    Plots the scaled volume differences and highlights certain points with vertical lines.
+
+    Args:
+    list_volume_performed (list of float): List of performed volume values.
+    filtered_data (list of float): List of offsets that need to be highlighted.
+    list_time (list of float): List of time offsets.
+    tempo (float): The tempo in beats per minute (BPM).
+    """
     list_time_second = [offset_to_seconds(x, tempo) for x in list_time]
     list_filtered_second = [offset_to_seconds(x, tempo) for x in filtered_data]
     list_volume_differences_scaled = get_scaled_differences_in_volumes(list_volume_performed)
