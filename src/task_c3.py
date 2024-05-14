@@ -1,19 +1,10 @@
 from music21 import converter, note, chord
 from collections import defaultdict
 
-def extract_pitches_from_midi(file_path):
-    score = converter.parse(file_path)
-    pitches = []
-    
-    for element in score.recurse():
-        if isinstance(element, note.Note):
-            pitches.append(element.pitch.midi)
-        elif isinstance(element, chord.Chord):
-            pitches.extend([p.midi for p in element.pitches])
-    
-    return pitches
-
 def extract_pitches_and_intervals(midi_file_path):
+    """
+    Extract pitches and intervals from a MIDI file.
+    """
     midi_data = music21.converter.parse(midi_file_path)
 
     pitches = []
@@ -30,6 +21,9 @@ def extract_pitches_and_intervals(midi_file_path):
     return pitches, intervals
 
 def find_repeated_patterns(data_list, pattern_length=8):
+    """
+    Find repeated patterns of a given length in a list of data.
+    """
     pattern_dict = defaultdict(int)
     for i in range(len(data_list) - pattern_length + 1):
         pattern = tuple(data_list[i:i + pattern_length])
@@ -37,6 +31,9 @@ def find_repeated_patterns(data_list, pattern_length=8):
     return pattern_dict
 
 def filter_subpatterns(repeated_patterns):
+    """
+    Filter out subpatterns from a dictionary of repeated patterns.
+    """
     patterns = list(repeated_patterns.keys())
     filtered_patterns = set(patterns)
 
@@ -50,7 +47,9 @@ def filter_subpatterns(repeated_patterns):
     return {pattern: repeated_patterns[pattern] for pattern in filtered_patterns}
 
 def get_filtered_patterns(data_list, direction='forward', min=9, max=20):
-
+    """
+    Get filtered patterns from a list of data.
+    """
     all_repeated_patterns = defaultdict(int)
     
     if direction == 'forward':
@@ -75,6 +74,9 @@ def get_filtered_patterns(data_list, direction='forward', min=9, max=20):
     return filtered_patterns
 
 def merge_and_filter_patterns(patterns1, patterns2):
+    """
+    Merge and filter patterns from two dictionaries.
+    """
     merged_patterns = patterns1.copy()
     for pattern in patterns2:
         if pattern not in merged_patterns:
