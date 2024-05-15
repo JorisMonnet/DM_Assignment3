@@ -1,203 +1,203 @@
-from music21 import converter, note, chord
-from collections import defaultdict
+import os
 
-def extract_pitches_and_intervals(midi_file_path):
+import music21
+
+
+def extract_intervals_and_durations(midi_file_path) -> dict:
     """
-    Extract pitches and intervals from a MIDI file.
+    Extract intervals and durations from a MIDI file.
     """
     midi_data = music21.converter.parse(midi_file_path)
-
-    pitches = []
-    for note in midi_data.recurse().notes:
-        if note.isNote:
-            pitches.append(note.pitch.midi)
+    pitches = {}
+    for n in midi_data.recurse().notes:
+        if n.isNote:
+            if (n.measureNumber, n.offset) not in pitches:
+                pitches[(n.measureNumber, n.offset)] = {
+                    'pitch': {n.pitch.midi},
+                    'duration': n.duration.quarterLength
+                }
+            else:
+                pitches[(n.measureNumber, n.offset)]['pitch'].add(n.pitch.midi)
+        elif n.isChord:
+            if (n.measureNumber, n.offset) not in pitches:
+                pitches[(n.measureNumber, n.offset)] = {
+                    'pitch': {p.midi for p in n.pitches},
+                    'duration': n.duration.quarterLength
+                }
+            else:
+                pitches[(n.measureNumber, n.offset)]['pitch'].update({p.midi for p in n.pitches})
 
     # Calculate the interval (difference) between pitches
-    intervals = []
-    for i in range(1, len(pitches)):
-        interval = pitches[i] - pitches[i-1]
-        intervals.append(interval)
+    pitches_with_intervals = {}
+    last_pitch = None
+    for onset, pitch in pitches.items():
+        if onset == (1, 0) or last_pitch is None:
+            pitches_with_intervals[onset] = {
+                'pitch': pitch['pitch'],
+                'root': min(pitch['pitch']),
+                'interval': None,
+                'duration': pitch['duration']
+            }
+        else:
+            pitches_with_intervals[onset] = {
+                'pitch': pitch['pitch'],
+                'root': min(pitch['pitch']),
+                'interval': min(pitch['pitch']) - last_pitch,
+                'duration': pitch['duration']
+            }
+        last_pitch = min(pitch['pitch'])
+    return pitches_with_intervals
 
-    return pitches, intervals
 
-def find_repeated_patterns(data_dict, pattern_length=8):
-    """
-    Find repeated patterns of a given length in a dictionary of data.
-    The dictionary keys are onsets (times) and values are pitches.
-    """
-    pattern_dict = defaultdict(list)
-    data_list = list(data_dict.values())
-    onsets = list(data_dict.keys())
+def find_repeating_sequences(data, key):
+    sequence = []
+    positions = []
+    durations = []
 
-    for i in range(len(data_list) - pattern_length + 1):
-        pattern = tuple(data_list[i:i + pattern_length])
-        onset_pattern = tuple(onsets[i:i + pattern_length])
-        pattern_dict[pattern].append(onset_pattern)
-    
-    pattern_dict = {k: v for k, v in pattern_dict.items() if len(v) > 1}
-    return pattern_dict
+    # Concatenate sequences, positions, and durations from all measures
+    for (measure, offset), value in sorted(data.items()):
+        sequence.append(value[key])
+        positions.append((measure, offset))
+        durations.append(value['duration'])
 
-def filter_subpatterns(repeated_patterns):
-    """
-    Filter out subpatterns from a dictionary of repeated patterns.
-    """
-    patterns = list(repeated_patterns.keys())
-    filtered_patterns = set(patterns)
+    # Function to find repeating patterns with their positions
+    def find_patterns_with_positions(seq, pos, dur):
+        n = len(seq)
+        patterns = []
+        seen = {}
+        for i in range(n):
+            for length in range(1, n - i):
+                pattern = tuple(seq[i:i + length])
+                if pattern in seen:
+                    first_occurrence = seen[pattern]
+                    if i - first_occurrence[0] >= length:
+                        total_duration = sum(dur[first_occurrence[0]:first_occurrence[0] + length])
+                        if total_duration >= 6.0:
+                            if pattern not in [p[0] for p in patterns]:
+                                patterns.append((pattern, [first_occurrence[1]]))
+                            for pat in patterns:
+                                if pat[0] == pattern:
+                                    pat[1].append(pos[i])
+                else:
+                    seen[pattern] = (i, pos[i])
+        return patterns
 
-    for i, pattern1 in enumerate(patterns):
-        for pattern2 in patterns[i+1:]:
-            if len(pattern1) < len(pattern2):
-                if any(pattern1 == pattern2[j:j+len(pattern1)] for j in range(len(pattern2) - len(pattern1) + 1)):
-                    filtered_patterns.discard(pattern1)
-                    break
+    # Function to remove sub-patterns
+    def remove_sub_patterns(patterns):
+        patterns.sort(key=lambda x: len(x[0]), reverse=True)
+        filtered_patterns = []
+        for i, (pattern, positions) in enumerate(patterns):
+            is_sub_pattern = False
+            for longer_pattern, _ in filtered_patterns:
+                if len(pattern) < len(longer_pattern):
+                    for j in range(len(longer_pattern) - len(pattern) + 1):
+                        if pattern == longer_pattern[j:j + len(pattern)]:
+                            is_sub_pattern = True
+                            break
+            if not is_sub_pattern:
+                filtered_patterns.append((pattern, positions))
+        return filtered_patterns
 
-    return {pattern: repeated_patterns[pattern] for pattern in filtered_patterns}
+    # Collect repeating sequences with positions
+    patterns = find_patterns_with_positions(sequence, positions, durations)
+    filtered_patterns = remove_sub_patterns(patterns)
 
-def get_filtered_patterns(data_dict, direction='forward', min_length=9, max_length=350):
-    """
-    Get filtered patterns from a dictionary of data.
-    The dictionary keys are onsets (times) and values are pitches.
-    """
-    all_repeated_patterns = defaultdict(list)
-    
-    for pattern_length in range(min_length, max_length):
-        # print(f"Checking patterns of length {pattern_length}:")
-        repeated_patterns = find_repeated_patterns(data_dict, pattern_length)
-        if not repeated_patterns:
-          print(f"No more repeated patterns found at length {pattern_length}. Exiting loop.")
-          break
-        for pattern, onsets in repeated_patterns.items():
-            if len(onsets) > 1:
-                all_repeated_patterns[pattern] = onsets
-                # print(f'Pattern {pattern} occurs {len(onsets)} times at onsets {onsets}.')
-    
-    filtered_patterns = filter_subpatterns(all_repeated_patterns)
-    
     return filtered_patterns
 
-def extract_onsets(midi_file_path):
-    """
-    Extract onsets from a MIDI file and return a sorted list of onset times.
-    
-    Parameters:
-    midi_file_path (str): Path to the MIDI file
-    
-    Returns:
-    List[float]: Sorted list of onset times
-    """
-    midi_data = converter.parse(midi_file_path)
-    onsets = []
-    
-    for element in midi_data.flat.notes:
-        if isinstance(element, note.Note) or isinstance(element, chord.Chord):
-            onsets.append(element.offset)
-    
-    # Sort the onsets to ensure they are in order
-    onsets = sorted(onsets)
-    durations = [round(float(onsets[i+1] - onsets[i]), 2) for i in range(len(onsets) - 1)]
-    
-    return onsets,durations
 
-def extract_onset_pitch_dict(midi_file_path):
+def get_boundaries(midi_file_path):
     """
-    Extract a dictionary from a MIDI file where keys are onset times and values are pitches.
-    
-    Parameters:
-    midi_file_path (str): Path to the MIDI file
-    
-    Returns:
-    dict: Dictionary with onset times as keys and pitches as values
+    Get boundaries for repeating patterns in a MIDI file.
+    :param midi_file_path:
+    :return:
     """
-    midi_data = converter.parse(midi_file_path)
-    onset_pitch_dict = {}
+    data = extract_intervals_and_durations(midi_file_path)
+    repeating_intervals = find_repeating_sequences(data, 'interval')
+    repeating_root = find_repeating_sequences(data, 'root')
+    repeating_durations = find_repeating_sequences(data, 'duration')
+    boundaries = []
+    for pattern, start_pos in repeating_intervals:
+        boundaries.extend(start_pos)
+    for pattern, start_pos in repeating_root:
+        boundaries.extend(start_pos)
+    for pattern, start_pos in repeating_durations:
+        boundaries.extend(start_pos)
+    boundaries = list(set(boundaries))
+    boundary_results = set()
+    for (measure, offset) in boundaries:
+        for result in boundary_results:
+            if abs(result - measure) < 2:
+                break
+        else:
+            boundary_results.add(measure)
+    return sorted(boundary_results)
 
-    for element in midi_data.flat.notes:
-        if isinstance(element, note.Note):
-            onset_pitch_dict[element.offset] = element.pitch.midi
-        elif isinstance(element, chord.Chord):
-            for pitch in element.pitches:
-                onset_pitch_dict[element.offset] = pitch.midi
-
-    return onset_pitch_dict
-
-def extract_onset_duration_dict(midi_file_path):
-    """
-    Extract a dictionary from a MIDI file where keys are onset times and values are the durations of the notes or chords.
-    
-    Parameters:
-    midi_file_path (str): Path to the MIDI file
-    
-    Returns:
-    dict: Dictionary with onset times as keys and durations as values
-    """
-    midi_data = converter.parse(midi_file_path)
-    onset_duration_dict = {}
-
-    for element in midi_data.flat.notes:
-        if element.offset not in onset_duration_dict:
-            # Store the duration for the first occurrence of this offset
-            onset_duration_dict[element.offset] = element.duration.quarterLength
-
-    return onset_duration_dict
 
 def list_midi_files(base_path):
+    """
+    List all MIDI files in a directory and its subdirectories.
+    :param base_path:
+    :return:
+    """
     midi_paths = []
     # Specify exact filenames to search for
     target_files = ['midi_score.mid', 'midi_score.midi']
     for root, dirs, files in os.walk(base_path):
         for file in files:
             if file in target_files:
-                midi_paths.append(os.path.join(root, file))
+                midi_paths.append(os.path.join(root, file).replace('\\', '/'))
     return midi_paths
 
-def process_folder(base_path):
+
+def get_number_of_measures(midi_file_path):
+    """
+    Get the number of measures in a MIDI file.
+    :param midi_file_path:
+    :return:
+    """
+    midi_data = music21.converter.parse(midi_file_path)
+    return len(midi_data.parts[0].getElementsByClass('Measure'))
+
+
+def run_on_whole_dataset(base_path: str = '../asap-dataset/Bach') -> dict:
+    """
+    Run the functions on the whole dataset.
+    :param base_path: path to the dataset
+    :return results: dict
+    """
     midi_files = list_midi_files(base_path)
-    pitch_pattern_counts = {}
-    duration_pattern_counts = {}
-    
+    results = {}
     for midi_file in midi_files:
-        onset_duration_dict = extract_onset_duration_dict(midi_file)
-        onset_pitches_dict = extract_onset_pitch_dict(midi_file)
-        
-        duration_patterns = get_filtered_patterns(onset_duration_dict)
-        pitches_patterns = get_filtered_patterns(onset_pitches_dict)
-        
-        # Create a key using the basename and parent directory name
-        parent_dir = os.path.basename(os.path.dirname(midi_file))
-        key_name = f"{parent_dir}/{os.path.basename(midi_file)}"
-        
-        duration_pattern_counts[key_name] = len(duration_patterns)
-        pitch_pattern_counts[key_name] = len(pitches_patterns)
-        
-        print(f"Processed {midi_file}:")
-        print('Here are duration patterns')
-        for pattern, onsets in duration_patterns.items():
-            print(f'length is {len(pattern)}')
-            print(f'Pattern{pattern}  occurs {len(onsets)} at onsets {onsets}')
-        print('Here are pitches patterns')
-        for pattern, onsets in pitches_patterns.items():
-            print(f'length is {len(pattern)}')
-            print(f'Pattern{pattern} occurs {len(onsets)} at onsets {onsets}')
-    
-    return duration_pattern_counts, pitch_pattern_counts
+        try:
+            boundaries = get_boundaries(midi_file)
+            print(f"MIDI File: {midi_file}")
+            nb_measures = get_number_of_measures(midi_file)
+            results[midi_file] = {
+                'boundaries': boundaries,
+                "nb_boundaries": len(boundaries),
+                "nb_measures": nb_measures,
+                "approx_ratio": nb_measures / 8
+            }
+        except Exception as e:
+            print(f"Error for {midi_file}: {e}")
+    print("AVERAGE RATIO:",
+          sum([value["nb_boundaries"] / value['approx_ratio'] for value in results.values()]) / len(results))
+    return results
 
-def plot_pattern_counts(pattern_counts, title):
-    """ Plots the counts of patterns from the dictionary """
-    # Names of the files
-    names = list(pattern_counts.keys())
-    # Count of patterns
-    counts = list(pattern_counts.values())
-    
-    # Creating the bar chart
-    plt.figure(figsize=(10, 8))  # Size of the figure
-    plt.barh(names, counts, color='skyblue')
-    plt.xlabel('Count of Patterns')
-    plt.ylabel('MIDI Files')
-    plt.title(title)
-    plt.gca().invert_yaxis()  # Invert the y-axis to have the highest counts at the top
+
+def plot_results(results: dict):
+    """
+    Plot the results as a line chart with the number of boundaries for each piece and the approximate ratio.
+    :param results:
+    :return:
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    sns.set_theme()
+    fig, ax = plt.subplots()
+    # 2 lines
+    ax.plot([value["approx_ratio"] for value in results.values()], label='Approximate Ratio', linewidth=0.8)
+    ax.plot([value["nb_boundaries"] for value in results.values()], label='Number of Boundaries', linewidth=0.8)
+    ax.set(xlabel='Piece', ylabel='Value',
+           title='Number of Boundaries vs Approximate Ratio')
     plt.show()
-
-
-  
-
-
