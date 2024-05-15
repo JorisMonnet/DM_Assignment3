@@ -5,6 +5,8 @@ by averaging the timing attributes for each beat of a meter.
 @Author: Joris Monnet
 @Date: 2024-03-26
 """
+import os
+
 import matplotlib.pyplot as plt
 import music21
 
@@ -209,3 +211,65 @@ def plot_volume(list_volume_performed: list[float], filtered_data: list[float], 
     plt.ylabel('Volume Differences Scaled ')
     plt.title('Volume Differences Scaled')
     plt.show()
+
+
+def get_number_of_phrases_detected(path: str) -> int:
+    """
+    Merged model_p
+    :param path:
+    :return: number of phrases detected
+    """
+    boundaries, boundaries_times = get_phrase_boundaries(path)
+    midi_path = ""
+    for root, dirs, files in os.walk(path):
+        for file in files:
+            if file.endswith(".mid") and file != "midi_score.mid":
+                midi_path = root + "/" + file
+                break
+    if midi_path == "":
+        return 0
+    midi_data = music21.converter.parse(midi_path)
+    tempo = midi_data.metronomeMarkBoundaries()[0][2].number
+    list_time, list_volumes, list_measures = get_times_volumes_measures(midi_path)
+    list_volume_differences_scaled = get_scaled_differences_in_volumes(list_volumes)
+    times_above_threshold_ = get_times_threshold(list_time, list_volume_differences_scaled, 0.15)
+    times_above_threshold = [float(x) for x in times_above_threshold_]
+    threshold_closest = 2
+
+    filtered_data = [times_above_threshold[0]]
+    for i in range(1, len(times_above_threshold)):
+        if times_above_threshold[i] - filtered_data[-1] > threshold_closest:
+            filtered_data.append(times_above_threshold[i])
+
+    split_point = [offset_to_seconds(x, tempo) for x in filtered_data]
+
+    potential_split_point = [split_point[0]]
+    for point in split_point:
+        for p in potential_split_point:
+            if abs(p - point) < 5:
+                break
+        else:
+            potential_split_point.append(point)
+
+    result_boundaries = []
+    boundaries_to_times = {}
+    for i in range(len(boundaries)):
+        boundaries_to_times[boundaries_times[i]] = boundaries[i]
+
+    threshold_similarity = 5
+    min_velocity = min(split_point) - threshold_similarity
+    max_velocity = max(split_point) + threshold_similarity
+
+    for point in split_point:
+        for boundaries_time in boundaries_times:
+            if abs(boundaries_time - point) < threshold_similarity and boundaries_time not in result_boundaries:
+                result_boundaries.append(boundaries_time)
+                break
+            elif boundaries_time < min_velocity and boundaries_time not in result_boundaries:
+                result_boundaries.append(boundaries_time)
+                break
+            elif boundaries_time > max_velocity and boundaries_time not in result_boundaries:
+                result_boundaries.append(boundaries_time)
+                break
+
+    return len(result_boundaries)

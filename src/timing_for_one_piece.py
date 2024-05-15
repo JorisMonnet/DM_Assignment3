@@ -137,7 +137,10 @@ def get_average_timing_one_piece(folder_path: str) -> dict or None:
         result[key] = {
             "symbolic": symbolic_times[key],
             "performed": {
-                "onset": avg_performed[key]
+                "onset": avg_performed[key],
+                "key": performed_list[0][key]["key"],
+                "meter": performed_list[0][key]["meter"],
+                "beat_type": performed_list[0][key]["beat_type"]
             }
         }
     return result
