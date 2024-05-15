@@ -195,7 +195,6 @@ def plot_results(results: dict):
     import seaborn as sns
     sns.set_theme()
     fig, ax = plt.subplots()
-    # 2 lines
     ax.plot([value["approx_ratio"] for value in results.values()], label='Approximate Ratio', linewidth=0.8)
     ax.plot([value["nb_boundaries"] for value in results.values()], label='Number of Boundaries', linewidth=0.8)
     ax.set(xlabel='Piece', ylabel='Value',
